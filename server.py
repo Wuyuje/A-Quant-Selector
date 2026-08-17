@@ -83,16 +83,25 @@ def score_stock(s, k):
     return {'score': round(sc,1)}
 
 def make_bs(s, k):
-    """精确买卖点: 次日冲高到压力位, 止损跌破支撑"""
-    price = s['price'] or s['chg'] or 1
-    if k:
-        buy = round(price,2)
-        target = round(k['resistance']*1.03,2)
-        stop = round(k['support']*0.97,2)
-        rr = round((target-buy)/max(buy-stop,0.01),1)
-        return {'buy':buy,'target':target,'stop':stop,'rr':f'1:{rr}'}
-    # 无K线: 用涨跌幅估算
-    return {'buy':round(price,2),'target':'--','stop':'--','rr':'--'}
+    """精确买卖点: 用K线箱体(支撑=近期低点, 压力=近期高点)"""
+    price = s['price'] or 0
+    # 从缓存K线加载(若传入的是路径或缓存)
+    kd = k if (k and isinstance(k,dict) and 'support' in k) else None
+    import os
+    if not kd and price:
+        cf='data/kline_'+s['code']+'.json'
+        if os.path.exists(cf):
+            try:
+                with open(cf) as f: kd=json.load(f)
+            except: pass
+    if kd and price and kd.get('support') and kd.get('resistance'):
+        buy=round(price,2)
+        target=round(kd['resistance']*1.04,2)   # 冲高4%到压力上方
+        stop=round(kd['support']*0.96,2)         # 跌破支撑-4%止损
+        rr=round((target-buy)/max(buy-stop,0.01),1)
+        return {'buy':buy,'target':target,'stop':stop,'rr':f'1:{rr}',
+                'spt':kd['support'],'res':kd['resistance']}
+    return {'buy':round(price,2) if price else '--','target':'--','stop':'--','rr':'--'}
 
 def do_pick():
     try:
@@ -108,7 +117,11 @@ def do_pick():
                 scored.append({**s, 'kline':k, **sc, 'bs': make_bs(s,k)})
         scored.sort(key=lambda x:-x['score'])
         top = scored[:3]
-        return {'ok':True, 'stocks':top, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
+        news=[]
+        try:
+            with open('data/news.json') as f: news=json.load(f)
+        except: pass
+        return {'ok':True, 'stocks':top, 'news':news, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
     except Exception as e:
         import traceback; traceback.print_exc()
         return {'ok':False, 'error':'选股失败: '+str(e)+' | '+str(traceback.format_exc())[:200]}
@@ -143,7 +156,7 @@ async function pick(){ $('st').textContent='🔄 拉取数据…';
    +'<div class="stats"><span class="stat up">涨'+s.chg+'%</span><span class="stat">换手'+s.hsl+'%</span><span class="stat">量比'+s.lb+'</span>'
    +'<span class="stat">5日'+s.d5+'%</span><span class="stat">'+(k.break?'箱体突破':'箱体内')+'</span><span class="stat">评分'+s.score+'</span></div>'
    +'<div class="bs"><div><div class="t">🎯买入</div><div class="v buy">'+s.bs.buy+'</div></div><div><div class="t">目标</div><div class="v target">'+s.bs.target+'</div></div><div><div class="t">止损</div><div class="v stop">'+s.bs.stop+'</div></div><div><div class="t">盈亏比</div><div class="v">'+s.bs.rr+'</div></div></div></div>'; });
-  $('rs').innerHTML=h;
+  $('rs').innerHTML=h; if(j.news&&j.news.length){ var nh='<div class="card"><div class="rank">📰 A股要闻</div>'; j.news.slice(0,5).forEach(function(n){nh+='<div style="font-size:12px;color:#94a3b8;margin:6px 0">• '+n.title+'</div>';}); nh+='</div>'; $('rs').innerHTML+=nh; }
  }catch(e){$('st').textContent='❌ '+e.message} }
 </script></body></html>'''
 
