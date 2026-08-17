@@ -79,7 +79,8 @@ def score_stock(s, k):
     ok = (2 < s['chg'] < 9.5) and (s['hsl'] > 3) and (s['lb'] > 0.8) and (s['zljlr'] > 0)
     if not ok: return None
     # 评分(加权)
-    sc = s['chg']*0.4 + min(s['hsl'],20)*0.2 + s['lb']*0.15 + min(s['zljlr']/1e8,5)*0.15 + (15 if s['d5']>2 else 0)
+    tail = s.get('tail',0)
+    sc = s['chg']*0.35 + min(s['hsl'],20)*0.15 + s['lb']*0.15 + min(s['zljlr']/1e8,5)*0.15 + tail*0.1 + (15 if s['d5']>2 else 0)
     return {'score': round(sc,1)}
 
 def make_bs(s, k):
@@ -117,11 +118,19 @@ def do_pick():
                 scored.append({**s, 'kline':k, **sc, 'bs': make_bs(s,k)})
         scored.sort(key=lambda x:-x['score'])
         top = scored[:3]
-        news=[]
+        news=[]; sent={}
+        import os
         try:
-            with open('data/news.json') as f: news=json.load(f)
+            if os.path.exists('data/news.json'):
+                with open('data/news.json') as f: news=json.load(f)
         except: pass
-        return {'ok':True, 'stocks':top, 'news':news, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
+        try:
+            if os.path.exists('data/sentiment.json'):
+                with open('data/sentiment.json') as f: sent=json.load(f)
+        except: pass
+        # 情绪弱时降级(减少推荐数, 风控)
+        if sent.get('weak') and top: top=top[:1]
+        return {'ok':True, 'stocks':top, 'news':news, 'sentiment':sent, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
     except Exception as e:
         import traceback; traceback.print_exc()
         return {'ok':False, 'error':'选股失败: '+str(e)+' | '+str(traceback.format_exc())[:200]}

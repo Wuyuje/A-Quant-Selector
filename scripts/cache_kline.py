@@ -31,6 +31,32 @@ def cache_kline(code):
     except Exception as e:
         return None
 
+
+def cache_sentiment():
+    """涨跌停情绪: 统计市场上涨占比(情绪)"""
+    try:
+        up=down=0; total=0
+        import time
+        for off in [0,100,200,300,400]:
+            url=f'https://proxy.finance.qq.com/cgi/cgi-bin/rank/hs/getBoardRankList?board_code=aStock&sort_type=price&direct=down&offset={off}&count=100'
+            req=urllib.request.Request(url,headers=UA)
+            d=json.loads(urllib.request.urlopen(req,timeout=20).read().decode())
+            rl=d.get('data',{}).get('rank_list',[])
+            if not rl: break
+            for r in rl:
+                z=float(r.get('zdf',0) or 0)
+                total+=1
+                if z>0: up+=1
+                elif z<0: down+=1
+            time.sleep(0.8)
+        ratio = up/total if total>0 else 0
+        sent={ 'up':up,'down':down,'total':total,'ratio':round(ratio,3),
+               'strong': ratio>0.6, 'weak': ratio<0.4 }
+        with open('data/sentiment.json','w') as f: json.dump(sent,f)
+        return sent
+    except Exception as e:
+        return {'up':0,'down':0,'total':0,'ratio':0.5,'strong':True,'weak':False}
+
 def cache_news():
     try:
         s = http_json(NEWS_URL, 'utf-8')
@@ -49,6 +75,9 @@ def main(codes):
             with open(f'data/kline_{code}.json','w') as f: json.dump(k,f)
             ok+=1
     print(f'K线缓存: {ok}/{len(codes)} 只')
+    # 情绪
+    sent = cache_sentiment()
+    if sent: print(f"涨跌停情绪: 涨{sent['up']} 跌{sent['down']} 上涨占比{sent['ratio']*100:.0f}%", file=sys.stderr)
     # 新闻
     news = cache_news()
     if news:
