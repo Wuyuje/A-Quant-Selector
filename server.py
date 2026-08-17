@@ -51,6 +51,16 @@ def filter_stock(r):
         'zsz': float(r.get('zsz')or 0), 'price': float(r.get('zxj')or 0),
     }
 
+def _kline_live(code):
+    """实时拉K线算箱体(仅TOP3用)"""
+    try:
+        sym = ('sh' if code.startswith('6') else 'sz') + code
+        d = json.loads(http_json(TS_KLINE.format(sym)))
+        k = d['data'][sym]['qfqday']
+        hs=[float(x[3]) for x in k]; ls=[float(x[4]) for x in k]
+        return {'support': min(ls[-20:]), 'resistance': max(hs[-20:])}
+    except: return None
+
 def get_kline(code):
     """腾讯K线: 算60日箱体/支撑压力 (读本地缓存或返回None)"""
     import os
@@ -60,17 +70,8 @@ def get_kline(code):
             with open(cf) as f: return json.load(f)
         except: pass
     try:
-        sym = ('sh' if code.startswith('6') else 'sz') + code
-        d = json.loads(http_json(TS_KLINE.format(sym)))
-        k = d['data'][sym]['qfqday']
-        hs=[float(x[3]) for x in k]; ls=[float(x[4]) for x in k]; closes=[float(x[2]) for x in k]
-        hi60, lo60 = max(hs), min(ls)
-        # 支撑=近期低点, 压力=近期高点
-        support = lo60 + (hi60-lo60)*0.2   # 箱体下沿附近
-        resistance = hi60
-        # 箱体突破: 当前价是否突破箱体上沿前沿
-        break_out = closes[-1] > hi60*0.98   # 接近/突破箱体上沿
-        return {'support':round(support,2), 'resistance':round(resistance,2), 'hi60':hi60, 'lo60':lo60, 'break':bool(break_out)}
+        # 沙箱/受限: 不联网(避免900只候选卡死), 无缓存返回None(买卖点用简化)
+        return None
     except: return None
 
 def score_stock(s, k):
@@ -118,6 +119,13 @@ def do_pick():
                 scored.append({**s, 'kline':k, **sc, 'bs': make_bs(s,k)})
         scored.sort(key=lambda x:-x['score'])
         top = scored[:3]
+        # 对TOP3联网拉K线算精确买卖点(仅3只不卡)
+        for s in top:
+            k = _kline_live(s['code'])
+            if k:
+                buy=round(s['price'],2); target=round(k['resistance']*1.04,2); stop=round(k['support']*0.96,2)
+                rr=round((target-buy)/max(buy-stop,0.01),1)
+                s['bs']={'buy':buy,'target':target,'stop':stop,'rr':f'1:{rr}','spt':round(k['support'],2),'res':round(k['resistance'],2)}
         news=[]; sent={}
         import os
         try:
