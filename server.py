@@ -130,10 +130,45 @@ def do_pick():
         except: pass
         # 情绪弱时降级(减少推荐数, 风控)
         if sent.get('weak') and top: top=top[:1]
-        return {'ok':True, 'stocks':top, 'news':news, 'sentiment':sent, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
+        board = do_pick_extra()
+        return {'ok':True, 'stocks':top, 'news':news, 'sentiment':sent, 'board':board, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
     except Exception as e:
         import traceback; traceback.print_exc()
         return {'ok':False, 'error':'选股失败: '+str(e)+' | '+str(traceback.format_exc())[:200]}
+
+
+# ─── 板块因子(东财板块接口, 本机联网可用; 沙箱受限时降级) ───
+def fetch_board():
+    """拉板块热榜(涨幅靠前板块, 反映板块情绪)"""
+    try:
+        url='https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f12,f14,f3'
+        req=urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0','Referer':'https://quote.eastmoney.com/'})
+        d=json.loads(urllib.request.urlopen(req, timeout=12).read().decode())
+        diff=d.get('data',{}).get('diff',[])
+        return [{'code':x.get('f12'),'name':x.get('f14'),'chg':x.get('f3')} for x in diff] if isinstance(diff,list) else []
+    except Exception as e:
+        return []   # 沙箱/受限: 返回空, 降级不阻塞
+
+def board_cache():
+    """读板块缓存文件(可交互拉取存 data/board.json)"""
+    import os
+    if os.path.exists('data/board.json'):
+        try:
+            with open('data/board.json') as f: return json.load(f)
+        except: pass
+    return []
+
+def do_pick_extra():
+    """补充板块: 优先本地缓存, 否则尝试实时"""
+    b = board_cache()
+    if not b:
+        b = fetch_board()
+        if b:
+            import os
+            try:
+                with open('data/board.json','w') as f: json.dump(b,f,ensure_ascii=False)
+            except: pass
+    return b
 
 # ─── 网页(内嵌, 带买卖点/趋势/大盘显示) ───
 def page_html():
