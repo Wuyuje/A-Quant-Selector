@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>A股尾盘选股</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.header{background:linear-gradient(135deg,#dc2626,#991b1b);padding:16px 20px;color:#fff;position:sticky;top:0;z-index:10}
+.header h1{font-size:18px;font-weight:700}
+.header .sub{font-size:12px;opacity:.85;margin-top:2px}
+.container{max-width:800px;margin:0 auto;padding:14px;padding-bottom:80px}
+.btn{background:#dc2626;color:#fff;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;width:100%;cursor:pointer}
+.btn:active{background:#b91c1c}
+.note{font-size:12px;color:#94a3b8;margin-top:10px;line-height:1.6}
+.status{background:#1e293b;border-radius:10px;padding:14px;margin-top:12px;font-size:13px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-top:12px}
+.card .rank{font-size:14px;font-weight:700;color:#f87171;margin-bottom:6px}
+.card .name{font-size:18px;font-weight:700}
+.card .code{font-size:13px;color:#94a3b8}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:13px}
+.stat{background:#334155;border-radius:8px;padding:6px 10px}
+.bs{padding:10px;border-radius:8px;background:#111827;margin-top:10px}
+.bs .l{font-size:12px;color:#94a3b8}
+.bs .v{font-size:16px;font-weight:700}
+.buy{color:#22c55e}.target{color:#f59e0b}.stop{color:#ef4444}
+.footer{position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid #334155;padding:12px;text-align:center;font-size:11px;color:#64748b}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📈 A股尾盘选股系统</h1>
+  <div class="sub">尾盘强势股 · 次日冲高 · 精确买卖点</div>
+</div>
+<div class="container">
+  <button class="btn" onclick="runSelect()">🕒 开始尾盘选股</button>
+  <div class="note">每交易日 14:30 后执行。筛选主板可买强势股，精选TOP3 + 买卖点。300/301/688 已排除。</div>
+  <div class="status" id="status">点击上方按钮开始选股…</div>
+  <div id="results"></div>
+</div>
+<div class="footer">A股量化 · 独立系统 · 仅供选股参考，买卖自决</div>
+<script>
+function $(id){return document.getElementById(id)}
+function out(msg){$('status').textContent=msg}
+async function runSelect(){
+  out('🔄 正在拉取全市场数据…');
+  try{
+    const r=await fetch('/api/stock/pick',{method:'POST'});
+    const j=await r.json();
+    if(!j.ok){out('⚠️ '+j.error);return}
+    out('✅ 选股完成');
+    render(j.stocks||[], j.meta||{});
+  }catch(e){out('❌ 失败:'+e.message)}
+}
+function render(stocks,meta){
+  var el=$('results');el.innerHTML='';
+  // meta
+  var m=document.createElement('div');m.className='status';
+  m.innerHTML='📊 '+meta.count+'只主板扫描 · 选出'+meta.pickCount+'只';
+  el.appendChild(m);
+  (stocks||[]).forEach(function(s,i){
+    var c=document.createElement('div');c.className='card';
+    c.innerHTML='<div class="rank">TOP '+(i+1)+'</div>'+
+      '<div class="name">'+s.name+'</div><div class="code">'+s.code+'</div>'+
+      '<div class="stats">'+
+        '<span class="stat">涨幅 '+s.chg+'%</span>'+
+        '<span class="stat">换手 '+s.turn+'%</span>'+
+        '<span class="stat">尾盘强 '+s.tail+'</span>'+
+        '<span class="stat">评分 '+s.score+'</span>'+
+      '</div>'+
+      '<div class="bs"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">'+
+        '<div><div class="l">🎯 买入</div><div class="v buy">'+s.bs.buy+'</div></div>'+
+        '<div><div class="l">目标</div><div class="v target">'+s.bs.target+'</div></div>'+
+        '<div><div class="l">止损</div><div class="v stop">'+s.bs.stop+'</div></div>'+
+        '<div><div class="l">盈亏比</div><div class="v">'+s.bs.rr+'</div></div>'+
+      '</div></div>'+
+      '<div style="font-size:12px;color:#94a3b8;margin-top:8px">支撑 '+s.support+' · 压力 '+s.resistance+'</div>';
+    el.appendChild(c);
+  });
+}
+</script>
+</body>
+</html>
