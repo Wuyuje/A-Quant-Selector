@@ -99,9 +99,13 @@ async function pick(){ $('st').textContent='🔄 拉取全市场数据…';
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/' or self.path == '/index.html':
+        if self.path in ('/', '/index.html'):
             self.send_response(200); self.send_header('Content-Type','text/html;charset=utf-8'); self.end_headers()
             self.wfile.write(page_html().encode('utf-8'))
+        elif self.path == '/api/pick' or self.path.startswith('/api/pick'):
+            j = do_pick(); body = json.dumps(j).encode('utf-8')
+            self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers()
+            self.wfile.write(body)
         else:
             super().do_GET()
     def do_POST(self):
