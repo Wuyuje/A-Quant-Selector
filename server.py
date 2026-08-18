@@ -139,7 +139,13 @@ def do_pick():
         # 情绪弱时降级(减少推荐数, 风控)
         if sent.get('weak') and top: top=top[:1]
         board = do_pick_extra()
-        return {'ok':True, 'stocks':top, 'news':news, 'sentiment':sent, 'board':board, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt}}
+        upd=''
+        if os.path.exists('data/market.json'):
+            try:
+                import datetime
+                upd=datetime.datetime.fromtimestamp(os.path.getmtime('data/market.json')).strftime('%m-%d %H:%M')
+            except: pass
+        return {'ok':True, 'stocks':top, 'news':news, 'sentiment':sent, 'board':board, 'meta':{'count':len(stocks),'pickCount':len(top),'mkt':mkt,'updated':upd}}
     except Exception as e:
         import traceback; traceback.print_exc()
         return {'ok':False, 'error':'选股失败: '+str(e)+' | '+str(traceback.format_exc())[:200]}
@@ -202,7 +208,7 @@ function $(i){return document.getElementById(i)}
 async function pick(){ $('st').textContent='🔄 拉取数据…';
  try{ const r=await fetch('/api/pick'); const j=await r.json();
   if(!j.ok){$('st').textContent='⚠️ '+j.error;return}
-  const m=j.meta; $('st').textContent='✅ 扫'+m.count+'只 选'+m.pickCount+'只 大盘(沪'+m.mkt.sh_chg+'%/深'+m.mkt.sz_chg+'%)';
+  const m=j.meta; var upd=(j.meta&&j.meta.updated)||'?'; $('st').textContent='✅ 扫'+m.count+'只 选'+m.pickCount+'只 大盘(沪'+m.mkt.sh_chg+'%/深'+m.mkt.sz_chg+'%) 数据更新:'+upd;
   let h=''; (j.stocks||[]).forEach(function(s,i){ let k=s.kline||{};
    h+='<div class="card"><div class="rank">TOP '+(i+1)+'</div><div class="name">'+s.name+'</div><div class="code">'+s.code+' · 主力净流入'+(s.zljlr/1e8).toFixed(2)+'亿</div>'
    +'<div class="stats"><span class="stat up">涨'+s.chg+'%</span><span class="stat">换手'+s.hsl+'%</span><span class="stat">量比'+s.lb+'</span>'
